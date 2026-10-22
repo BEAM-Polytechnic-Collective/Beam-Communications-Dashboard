@@ -244,7 +244,9 @@
         const authenticated = await logto.isAuthenticated();
 
         if (!authenticated) {
-          await logto.signIn(CONFIG.siteUrl);
+          // Replace your old await logto.signIn(...) line with this dynamic version:
+          await logto.signIn(window.location.origin + window.location.pathname);
+
           return;
         }
 
