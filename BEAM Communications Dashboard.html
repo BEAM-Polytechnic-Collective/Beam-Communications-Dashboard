@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#000000">
+  <title>BEAM Communications Dashboard</title>
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    html, body, #root {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #000;
+      font-family: -apple-system, BlinkMacSystemFont,
+        "Segoe UI", Roboto, sans-serif;
+    }
+
+    #loading {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      gap: 14px;
+      width: 100%;
+      height: 100%;
+      padding: 24px;
+      color: #fff;
+      text-align: center;
+    }
+
+    .spinner {
+      width: 34px;
+      height: 34px;
+      border: 3px solid #333;
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    #dashboard {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      border: none;
+      display: block;
+      background: #000;
+    }
+
+    #logout {
+      position: fixed;
+      z-index: 10000;
+      top: 14px;
+      right: 14px;
+      padding: 10px 15px;
+      border: 1px solid rgba(255,255,255,0.25);
+      border-radius: 9px;
+      background: rgba(20,20,20,0.88);
+      color: #fff;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      opacity: 0.3;
+      transition: opacity 0.2s, background 0.2s;
+      backdrop-filter: blur(10px);
+    }
+
+    #logout:hover,
+    #logout:focus-visible {
+      opacity: 1;
+      background: #b91c1c;
+    }
+
+    #logout:disabled {
+      cursor: wait;
+      opacity: 0.8;
+    }
+
+    #error-message {
+      color: #ff7777;
+      line-height: 1.6;
+      overflow-wrap: anywhere;
+    }
+
+    #retry {
+      padding: 10px 18px;
+      border: 0;
+      border-radius: 8px;
+      background: #fff;
+      color: #000;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    @media (hover: none) {
+      #logout {
+        opacity: 0.85;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <main id="root">
+    <div id="loading">
+      <div class="spinner"></div>
+      <div>Connecting to the BEAM Network...</div>
+    </div>
+  </main>
+
+  <script type="module">
+    import LogtoClient from
+      'https://cdn.jsdelivr.net/npm/@logto/browser@3.0.14/+esm';
+
+    const CONFIG = {
+      endpoint: 'https://y93vej.logto.app/',
+      appId: '7ygc3adscpaqf2shwxewq',
+      siteUrl: 'https://ratty-plum-k6hieofb.edgeone.dev/',
+      dashboardUrl: 'https://beampc.base44.app'
+    };
+
+    const root = document.getElementById('root');
+
+    function showError(message) {
+      root.replaceChildren();
+
+      const panel = document.createElement('div');
+      panel.id = 'loading';
+
+      const title = document.createElement('div');
+      title.textContent = 'BEAM Connection Failed';
+      title.style.fontSize = '20px';
+      title.style.fontWeight = '700';
+
+      const detail = document.createElement('div');
+      detail.id = 'error-message';
+      detail.textContent = message;
+
+      const retry = document.createElement('button');
+      retry.id = 'retry';
+      retry.textContent = 'Try Again';
+      retry.onclick = () => window.location.reload();
+
+      panel.append(title, detail, retry);
+      root.appendChild(panel);
+    }
+
+    function showDashboard() {
+      root.replaceChildren();
+
+      const iframe = document.createElement('iframe');
+      iframe.id = 'dashboard';
+      iframe.src = CONFIG.dashboardUrl;
+      iframe.title = 'BEAM Communications Dashboard';
+
+      iframe.setAttribute(
+        'sandbox',
+        'allow-scripts allow-same-origin allow-forms allow-popups allow-modals'
+      );
+
+      iframe.setAttribute(
+        'allow',
+        'geolocation; microphone; camera; clipboard-write; fullscreen'
+      );
+
+      const logout = document.createElement('button');
+      logout.id = 'logout';
+      logout.type = 'button';
+      logout.textContent = 'Log Out';
+      logout.title = 'Sign out of your BEAM account';
+
+      logout.addEventListener('click', async () => {
+        const confirmed = window.confirm(
+          'Are you sure you want to log out of BEAM?'
+        );
+
+        if (!confirmed) return;
+
+        logout.disabled = true;
+        logout.textContent = 'Signing out...';
+
+        try {
+          await logto.signOut(CONFIG.siteUrl);
+        } catch (error) {
+          console.error('Logto sign-out failed:', error);
+          logout.disabled = false;
+          logout.textContent = 'Log Out';
+
+          showError(
+            'Sign-out failed. Check your connection and Logto settings, then try again.'
+          );
+        }
+      });
+
+      root.append(iframe, logout);
+    }
+
+    const logto = new LogtoClient({
+      endpoint: CONFIG.endpoint,
+      appId: CONFIG.appId
+    });
+
+    async function init() {
+      try {
+        // Handle a redirect back from Logto.
+        const params = new URLSearchParams(window.location.search);
+
+        if (params.has('error')) {
+          const errorDescription =
+            params.get('error_description') ||
+            params.get('error');
+
+          window.history.replaceState(
+            {},
+            document.title,
+            window.location.pathname
+          );
+
+          throw new Error(errorDescription);
+        }
+
+        if (params.has('code')) {
+          await logto.handleSignInCallback(window.location.href);
+
+          // Remove authorization parameters from the address bar.
+          window.history.replaceState(
+            {},
+            document.title,
+            window.location.pathname
+          );
+        }
+
+        const authenticated = await logto.isAuthenticated();
+
+        if (!authenticated) {
+          await logto.signIn(CONFIG.siteUrl);
+          return;
+        }
+
+        showDashboard();
+
+      } catch (error) {
+        console.error('BEAM authentication error:', error);
+
+        showError(
+          error?.message ||
+          'Unable to authenticate. Check your connection and try again.'
+        );
+      }
+    }
+
+    init();
+  </script>
+</body>
+</html>
